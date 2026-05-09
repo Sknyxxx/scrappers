@@ -1,62 +1,39 @@
-name: Pornhub
+name: PornhubPremium
+performerByName:
+  action: scrapeXPath
+  queryURL: https://www.pornhubpremium.com/pornstars/search?search={}
+  scraper: performerSearch
 performerByURL:
   - action: scrapeXPath
     url:
-      - pornhub.com/pornstar/
-      - pornhub.org/pornstar/
-      - pornhub.com/model/
-      - pornhub.org/model/
+      - pornhubpremium.com
     scraper: performerScraper
 sceneByURL:
   - action: scrapeXPath
     url:
-      - pornhub.com/view_video.php?viewkey=
-      - pornhub.org/view_video.php?viewkey=
+      - pornhubpremium.com/view_video.php?viewkey=
     scraper: sceneScraper
 sceneByFragment:
   action: scrapeXPath
-  queryURL: https://www.pornhub.com/view_video.php?viewkey={filename}
+  queryURL: https://www.pornhubpremium.com/view_video.php?viewkey={filename}
   queryURLReplace:
     filename:
-      - regex: (?:.*[^a-zA-Z\d])?((?:ph)?(?:[a-zA-Z\d]{13})).+
+      - regex: (?:.*[^a-zA-Z\d])+(ph(?:[a-zA-Z\d]+)).+
         with: $1
       - regex: .*\.[^\.]+$ # if no ph id is found in the filename
         with: # clear the filename so that it doesn't leak to ph
   scraper: sceneScraper
 
-sceneByName:
-  action: scrapeXPath
-  queryURL: https://www.pornhub.com/video/search?search={}
-  scraper: sceneSearch
-sceneByQueryFragment:
-  action: scrapeXPath
-  queryURL: "{url}"
-  scraper: sceneScraper
-
-performerByName:
-  action: script
-  script:
-    - python3
-    - Pornhub.py
-    - performer-by-name
-
 xPathScrapers:
-  sceneSearch:
-    common:
-      $searchItem: //ul[contains(@class, "search-video-thumbs") and not(@id="bottomVideos")]
-      $searchThumb: //ul[contains(@class, "search-video-thumbs") and not(@id="bottomVideos")]//div[contains(@class, "thumbnail-info-wrapper")]
-
-    scene:
-      Title: $searchThumb//span[@class="title"]/a
-      URL:
-        selector: $searchThumb//span[@class="title"]/a/@href
+  performerSearch:
+    performer:
+      Name: //div[@class="wrap"]/div[@class="thumbnail-info-wrapper"]/a[@class="title"]/text()
+      URLs:
+        selector: //div[@class="wrap"]/div[@class="thumbnail-info-wrapper"]/a[@class="title"]/@href
         postProcess:
           - replace:
               - regex: ^
-                with: "https://www.pornhub.com"
-      Image: $searchItem//div[contains(@class, "phimage")]//img/@data-mediumthumb
-      Studio:
-        Name: $searchThumb//div[contains(@class, "usernameWrap")]/a[matches(@href, "/(channels|model|pornstar)/")]
+                with: "https://www.pornhubpremium.com"
   performerScraper:
     common:
       $infoPiece: //div[@class="infoPiece"]
@@ -111,53 +88,37 @@ xPathScrapers:
       Image: //div[@class="thumbImage"]/img/@src|//img[@id="getAvatar"]/@src
   sceneScraper:
     common:
-      $datablob: //script[contains(., 'VideoObject')]/text()
-      $videowrap: //div[@class="video-wrapper"]
-      $videoDetails: //div[contains(@class,"video-detailed-info")]
-      # Check that the button does not appear inside a "From:" div because then you'll get the studio
-      # as a performer if it's an affiliate channel, for example https://www.pornhub.com/view_video.php?viewkey=67e19227400d2
-      $studioButton: //div[contains(@class,"video-actions-tabs")]//span[not(ancestor::div[@class="from"])][contains(concat(" ",normalize-space(@class)," ")," usernameBadgesWrapper ")]//a
-      # datalayer for unlisted-proof videos #2385
-      $dataLayer: //script[@type="text/javascript"][contains(.,'window.dataLayer.push')]
+      $performer: //div[@class="pornstarsWrapper js-pornstarsWrapper"]/a[@data-mxptype="Pornstar"]
+      $studio: //div[@data-type="channel"]/a
     scene:
-      Title:
-        selector: //h1
-        postProcess:
-          - replace:
-              # This scraper can be misused and end up pulling its information
-              # from https://www.pornhub.com/view_video.php?viewkey=
-              # that is, a page without a proper Pornhub scene code:
-              # this will make it return an empty result instead of an erroneous title
-              - regex: ^Recently Featured Porn Videos$
-                with: ""
-      URL: //meta[@property="og:url"]/@content
+      Title: //h1[@class="title"]/span/text()
+      Details: //meta[@property="og:description"][1]/@content
       Date:
-        selector: $dataLayer
+        selector: //script[contains(., 'uploadDate')]/text()
         postProcess:
           - replace:
-              - regex: .*(?:'video_date_published'\s*:\s*')(\d+)'.+
+              - regex: .+(?:"uploadDate":\s")([^"]+).+
                 with: $1
-          - parseDate: "20060102"
-      Code:
-        selector: //meta[@property="og:url"]/@content
-        postProcess:
-          - replace:
-              - regex: '.+?(\=)'
-                with:
+              - regex: (.+)T.+
+                with: $1
+          - parseDate: 2006-01-02
       Tags:
-        Name: $videoDetails//a[@data-label="category"] | $videoDetails//a[@data-label="tag"]
+        Name: //div[@class="categoriesWrapper"]//a[not(@class="add-btn-small ")]|//div[@class="tagsWrapper"]//a[not(@class="add-btn-small")]
+      Image:
+        selector: //meta[@property="og:image"][1]/@content
       Performers:
-        Name: $videoDetails//a[@data-label="pornstar"] | $studioButton
-      Image: //meta[@property="og:image"]/@content
+        Name: $performer/@data-mxptext
+        URLs: $performer/@href
       Studio:
-        Name: $videoDetails//a[@data-label="channel"] | $studioButton
-
+        Name: $studio
+        URL: $studio/@href
 driver:
   cookies:
-    - CookieURL: "https://www.pornhub.com"
+    - CookieURL: "https://pornhubpremium.com"
       Cookies:
-        - Name: "accessAgeDisclaimerPH"
-          Domain: ".pornhub.com"
-          Value: "1"
+        - Name: "il"
+          Domain: ".pornhubpremium.com"
+          Value: "<'il' cookie value>"
           Path: "/"
-# Last Updated September 26, 2026
+# Reference: https://github.com/stashapp/CommunityScrapers/blob/master/scrapers/Pornhub.yml
+# Last Updated September 17, 2025
